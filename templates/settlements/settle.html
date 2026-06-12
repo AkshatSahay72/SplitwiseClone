@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+
+{% block title %}Settle Up - Splitwise Clone{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card card-premium p-4">
+            <div class="d-flex align-items-center mb-4 border-bottom pb-3">
+                <a href="{{ url_for('groups.group_detail', group_id=group.id) }}" class="btn btn-outline-secondary btn-sm rounded-circle me-3" style="width: 32px; height: 32px; padding: 0; display: inline-flex; align-items: center; justify-content: center;">
+                    <i class="bi bi-arrow-left"></i>
+                </a>
+                <h3 class="fw-bold m-0"><i class="bi bi-cash-stack text-accent me-2"></i>Record Settlement</h3>
+            </div>
+            
+            <form action="{{ url_for('settlements.create_settlement', group_id=group.id) }}" method="POST" id="settleForm">
+                <!-- Payer (Who is sending money) -->
+                <div class="mb-3">
+                    <label for="payerSelect" class="form-label fw-semibold">Who paid?</label>
+                    <select name="payer_id" class="form-select form-control-premium" id="payerSelect" required>
+                        <option value="" disabled selected>Choose payer...</option>
+                        {% for member in group.members %}
+                            <option value="{{ member.user.id }}" {% if member.user.id == current_user.id %}selected{% endif %}>
+                                {{ member.user.full_name }} {% if member.user.id == current_user.id %}(You){% endif %}
+                            </option>
+                        {% endfor %}
+                    </select>
+                    <div class="form-text text-muted">This user's net debt will decrease (or credit increase).</div>
+                </div>
+                
+                <!-- Receiver (Who is receiving money) -->
+                <div class="mb-3">
+                    <label for="receiverSelect" class="form-label fw-semibold">Who received the payment?</label>
+                    <select name="receiver_id" class="form-select form-control-premium" id="receiverSelect" required>
+                        <option value="" disabled selected>Choose receiver...</option>
+                        {% for member in group.members %}
+                            {% if member.user.id != current_user.id %}
+                                <option value="{{ member.user.id }}">{{ member.user.full_name }}</option>
+                            {% else %}
+                                <option value="{{ member.user.id }}">{{ member.user.full_name }} (You)</option>
+                            {% endif %}
+                        {% endfor %}
+                    </select>
+                    <div class="form-text text-muted">This user's credit will decrease (or debt increase).</div>
+                </div>
+                
+                <!-- Amount -->
+                <div class="mb-4">
+                    <label for="settleAmount" class="form-label fw-semibold">Amount Paid (Rs.)</label>
+                    <div class="input-group">
+                        <span class="input-group-text bg-light border-2 border-end-0" style="border-radius: var(--border-radius-md) 0 0 var(--border-radius-md);">Rs.</span>
+                        <input type="number" step="0.01" name="amount" class="form-control form-control-premium border-start-0" id="settleAmount" placeholder="0.00" required>
+                    </div>
+                </div>
+                
+                <button type="submit" class="btn btn-accent w-100 py-2 rounded-3 fw-medium">
+                    <i class="bi bi-check-lg me-1"></i> Save Settlement
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const settleForm = document.getElementById('settleForm');
+    const payerSelect = document.getElementById('payerSelect');
+    const receiverSelect = document.getElementById('receiverSelect');
+    
+    settleForm.addEventListener('submit', function(e) {
+        if (payerSelect.value === receiverSelect.value) {
+            alert('Error: Payer and receiver cannot be the same person.');
+            e.preventDefault();
+            return false;
+        }
+    });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Splitwise Clone{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h2 class="fw-bold m-0"><i class="bi bi-grid-1x2-fill me-2 text-accent"></i>Dashboard</h2>
+            <a href="{{ url_for('groups.create_group') }}" class="btn btn-accent rounded-pill px-4 shadow-sm">
+                <i class="bi bi-plus-lg me-1"></i> Create Group
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Metrics Cards Row -->
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <div class="metric-card metric-owed">
+            <div class="small text-white-50 uppercase fw-semibold mb-1">YOU ARE OWED</div>
+            <div class="metric-val">Rs. {{ "%.2f"|format(total_owed) }}</div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="metric-card metric-owe">
+            <div class="small text-white-50 uppercase fw-semibold mb-1">YOU OWE</div>
+            <div class="metric-val">Rs. {{ "%.2f"|format(total_owe) }}</div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="metric-card {% if net_balance > 0 %}metric-owed{% elif net_balance < 0 %}metric-owe{% else %}metric-neutral{% endif %}">
+            <div class="small text-white-50 uppercase fw-semibold mb-1">TOTAL NET BALANCE</div>
+            <div class="metric-val">
+                {% if net_balance > 0 %}+{% endif %}Rs. {{ "%.2f"|format(net_balance) }}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Groups List Column -->
+    <div class="col-lg-5">
+        <div class="card card-premium">
+            <div class="card-header-premium d-flex justify-content-between align-items-center">
+                <h5 class="fw-bold m-0"><i class="bi bi-people-fill me-2 text-muted"></i>My Groups</h5>
+                <span class="badge bg-secondary rounded-pill">{{ user_groups|length }}</span>
+            </div>
+            <div class="list-group list-group-flush">
+                {% if user_groups %}
+                    {% for item in user_groups %}
+                        <a href="{{ url_for('groups.group_detail', group_id=item.group.id) }}" class="list-group-item list-group-item-premium d-flex justify-content-between align-items-center text-decoration-none">
+                            <div>
+                                <h6 class="fw-semibold m-0 text-dark">{{ item.group.name }}</h6>
+                                <small class="text-muted">{{ item.group.description or 'No description' }}</small>
+                            </div>
+                            <div class="text-end">
+                                {% if item.balance > 0 %}
+                                    <span class="text-success small fw-semibold d-block">You are owed</span>
+                                    <span class="text-success fw-bold">Rs. {{ "%.2f"|format(item.balance) }}</span>
+                                {% elif item.balance < 0 %}
+                                    <span class="text-danger small fw-semibold d-block">You owe</span>
+                                    <span class="text-danger fw-bold">Rs. {{ "%.2f"|format(-item.balance) }}</span>
+                                {% else %}
+                                    <span class="text-muted small d-block">Settled up</span>
+                                    <span class="text-muted fw-bold">Rs. 0.00</span>
+                                {% endif %}
+                            </div>
+                        </a>
+                    {% endfor %}
+                {% else %}
+                    <div class="p-4 text-center text-muted">
+                        <i class="bi bi-journal-plus fs-1 d-block mb-2"></i>
+                        <p class="mb-0">You are not in any groups yet.</p>
+                        <a href="{{ url_for('groups.create_group') }}" class="btn btn-link btn-sm text-accent text-decoration-none p-0 mt-2">Create your first group</a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Expenses Column -->
+    <div class="col-lg-7">
+        <div class="card card-premium">
+            <div class="card-header-premium">
+                <h5 class="fw-bold m-0"><i class="bi bi-receipt me-2 text-muted"></i>Recent Expenses</h5>
+            </div>
+            <div class="list-group list-group-flush">
+                {% if recent_expenses %}
+                    {% for expense in recent_expenses %}
+                        <a href="{{ url_for('expenses.expense_detail', expense_id=expense.id) }}" class="list-group-item list-group-item-premium text-decoration-none text-dark">
+                            <div class="d-flex align-items-center">
+                                <div class="avatar-circle me-3">
+                                    {{ expense.description[0]|upper }}
+                                </div>
+                                <div class="flex-grow-1">
+                                    <div class="d-flex justify-content-between align-items-baseline">
+                                        <h6 class="fw-bold m-0">{{ expense.description }}</h6>
+                                        <span class="fw-bold text-dark">Rs. {{ "%.2f"|format(expense.total_amount) }}</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between align-items-baseline text-muted small mt-1">
+                                        <span>
+                                            Paid by <strong>{{ expense.paid_by.full_name }}</strong> in <em>{{ expense.group.name }}</em>
+                                        </span>
+                                        <span>{{ expense.created_at.strftime('%b %d, %I:%M %p') }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                    {% endfor %}
+                {% else %}
+                    <div class="p-5 text-center text-muted">
+                        <i class="bi bi-cash-stack fs-1 d-block mb-2"></i>
+                        <p class="mb-0">No expenses recorded yet.</p>
+                        <small>Join a group and add shared expenses to start tracking.</small>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

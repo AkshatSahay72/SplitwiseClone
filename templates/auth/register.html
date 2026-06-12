@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% block title %}Register - Splitwise Clone{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center align-items-center" style="min-height: 70vh;">
+    <div class="col-md-5">
+        <div class="card card-premium p-4">
+            <div class="text-center mb-4">
+                <span class="avatar-circle avatar-accent mx-auto mb-3" style="width: 60px; height: 60px; font-size: 1.5rem;">
+                    <i class="bi bi-person-plus-fill"></i>
+                </span>
+                <h3 class="fw-bold">Create Account</h3>
+                <p class="text-muted">Start tracking shared expenses with roommates</p>
+            </div>
+            
+            <form action="{{ url_for('auth.register') }}" method="POST">
+                <div class="form-floating mb-3">
+                    <input type="text" name="full_name" class="form-control form-control-premium" id="nameInput" placeholder="John Doe" required>
+                    <label for="nameInput">Full Name</label>
+                </div>
+                <div class="form-floating mb-3">
+                    <input type="email" name="email" class="form-control form-control-premium" id="emailInput" placeholder="name@example.com" required>
+                    <label for="emailInput">Email address</label>
+                </div>
+                <div class="form-floating mb-3">
+                    <input type="password" name="password" class="form-control form-control-premium" id="passwordInput" placeholder="Password" required>
+                    <label for="passwordInput">Password</label>
+                </div>
+                <div class="form-floating mb-4">
+                    <input type="password" name="confirm_password" class="form-control form-control-premium" id="confirmPasswordInput" placeholder="Confirm Password" required>
+                    <label for="confirmPasswordInput">Confirm Password</label>
+                </div>
+                
+                <button type="submit" class="btn btn-accent w-100 py-2 rounded-3 fw-medium">
+                    <i class="bi bi-person-check me-1"></i> Register Account
+                </button>
+            </form>
+            
+            <div class="text-center mt-4 pt-2 border-top">
+                <span class="text-muted">Already have an account?</span>
+                <a href="{{ url_for('auth.login') }}" class="text-decoration-none fw-medium ms-1" style="color: var(--accent-hover);">Sign In</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

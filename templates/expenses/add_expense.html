@@ -1,0 +1,287 @@
+{% extends "base.html" %}
+
+{% block title %}Add Expense - Splitwise Clone{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card card-premium p-4">
+            <div class="d-flex align-items-center mb-4 border-bottom pb-3">
+                <a href="{{ url_for('groups.group_detail', group_id=group.id) }}" class="btn btn-outline-secondary btn-sm rounded-circle me-3" style="width: 32px; height: 32px; padding: 0; display: inline-flex; align-items: center; justify-content: center;">
+                    <i class="bi bi-arrow-left"></i>
+                </a>
+                <h3 class="fw-bold m-0"><i class="bi bi-receipt text-accent me-2"></i>Add Expense in {{ group.name }}</h3>
+            </div>
+            
+            <form action="{{ url_for('expenses.add_expense', group_id=group.id) }}" method="POST" id="expenseForm">
+                <!-- Description -->
+                <div class="mb-3">
+                    <label for="expenseDesc" class="form-label fw-semibold">Description</label>
+                    <input type="text" name="description" class="form-control form-control-premium" id="expenseDesc" placeholder="e.g. Dinner, Cab Fare, Groceries" required>
+                </div>
+                
+                <div class="row mb-4">
+                    <!-- Amount -->
+                    <div class="col-md-6">
+                        <label for="expenseAmount" class="form-label fw-semibold">Total Amount (Rs.)</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light border-2 border-end-0" style="border-radius: var(--border-radius-md) 0 0 var(--border-radius-md);">Rs.</span>
+                            <input type="number" step="0.01" name="total_amount" class="form-control form-control-premium border-start-0" id="expenseAmount" placeholder="0.00" required>
+                        </div>
+                    </div>
+                    
+                    <!-- Paid By -->
+                    <div class="col-md-6">
+                        <label for="paidBy" class="form-label fw-semibold">Paid By</label>
+                        <select name="paid_by_id" class="form-select form-control-premium" id="paidBy" required>
+                            {% for member in group.members %}
+                                <option value="{{ member.user.id }}" {% if member.user.id == current_user.id %}selected{% endif %}>
+                                    {{ member.user.full_name }} {% if member.user.id == current_user.id %}(You){% endif %}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                
+                <!-- Split Type Selection -->
+                <div class="card p-3 mb-4 bg-light border-0 rounded-3">
+                    <label class="form-label fw-bold mb-2">How is this split?</label>
+                    <div class="d-flex gap-3">
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="radio" name="split_type" id="splitEqual" value="equal" checked>
+                            <label class="form-check-label fw-semibold" for="splitEqual">Equally</label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="radio" name="split_type" id="splitPercentage" value="percentage">
+                            <label class="form-check-label fw-semibold" for="splitPercentage">By Percentages</label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="radio" name="split_type" id="splitShare" value="share">
+                            <label class="form-check-label fw-semibold" for="splitShare">By Shares</label>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Dynamic Split Options Container -->
+                <div class="mb-4">
+                    <!-- Equal Split Section -->
+                    <div id="equalSplitSection" class="split-section">
+                        <h6 class="fw-bold mb-3 text-muted">SELECT PARTICIPANTS TO SPLIT WITH:</h6>
+                        <div class="row g-2">
+                            {% for member in group.members %}
+                                <div class="col-md-6">
+                                    <div class="form-check card p-2 flex-row align-items-center gap-2 border-0 shadow-sm" style="border-radius: var(--border-radius-md);">
+                                        <input class="form-check-input ms-0 mt-0" type="checkbox" name="participants" value="{{ member.user.id }}" id="userCheck_{{ member.user.id }}" checked>
+                                        <label class="form-check-label w-100 cursor-pointer d-flex align-items-center" for="userCheck_{{ member.user.id }}">
+                                            <span class="avatar-circle avatar-accent me-2" style="width: 28px; height: 28px; font-size: 0.75rem;">
+                                                {{ member.user.full_name[0]|upper }}
+                                            </span>
+                                            <span class="fw-medium small text-dark">{{ member.user.full_name }}</span>
+                                        </label>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    
+                    <!-- Percentage Split Section -->
+                    <div id="percentageSplitSection" class="split-section d-none">
+                        <h6 class="fw-bold mb-3 text-muted">ENTER PERCENTAGES (MUST SUM TO 100%):</h6>
+                        <div class="table-responsive">
+                            <table class="table align-middle">
+                                <thead>
+                                    <tr>
+                                        <th>Member</th>
+                                        <th style="width: 150px;">Percentage (%)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for member in group.members %}
+                                        <tr>
+                                            <td>
+                                                <div class="d-flex align-items-center">
+                                                    <span class="avatar-circle me-2" style="width: 28px; height: 28px; font-size: 0.75rem;">
+                                                        {{ member.user.full_name[0]|upper }}
+                                                    </span>
+                                                    <span class="fw-semibold text-dark small">{{ member.user.full_name }}</span>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <div class="input-group input-group-sm">
+                                                    <input type="number" step="0.01" min="0" max="100" name="percentage_{{ member.user.id }}" class="form-control pct-input text-end" value="0">
+                                                    <span class="input-group-text">%</span>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                                <tfoot>
+                                    <tr class="table-light">
+                                        <td class="fw-bold text-end">Total Percentage:</td>
+                                        <td class="fw-bold text-end"><span id="pctTotal">0.00</span>%</td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <!-- Share Split Section -->
+                    <div id="shareSplitSection" class="split-section d-none">
+                        <h6 class="fw-bold mb-3 text-muted">ENTER SHARES FOR EACH MEMBER:</h6>
+                        <div class="table-responsive">
+                            <table class="table align-middle">
+                                <thead>
+                                    <tr>
+                                        <th>Member</th>
+                                        <th style="width: 150px;">Shares</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for member in group.members %}
+                                        <tr>
+                                            <td>
+                                                <div class="d-flex align-items-center">
+                                                    <span class="avatar-circle me-2" style="width: 28px; height: 28px; font-size: 0.75rem;">
+                                                        {{ member.user.full_name[0]|upper }}
+                                                    </span>
+                                                    <span class="fw-semibold text-dark small">{{ member.user.full_name }}</span>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <input type="number" min="0" step="1" name="share_{{ member.user.id }}" class="form-control form-control-sm share-input text-end" value="0">
+                                            </td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                                <tfoot>
+                                    <tr class="table-light">
+                                        <td class="fw-bold text-end">Total Shares:</td>
+                                        <td class="fw-bold text-end"><span id="shareTotal">0</span></td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                
+                <button type="submit" class="btn btn-accent w-100 py-2 rounded-3 fw-medium">
+                    <i class="bi bi-check-lg me-1"></i> Save Expense
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const splitEqual = document.getElementById('splitEqual');
+    const splitPercentage = document.getElementById('splitPercentage');
+    const splitShare = document.getElementById('splitShare');
+    
+    const equalSection = document.getElementById('equalSplitSection');
+    const percentageSection = document.getElementById('percentageSplitSection');
+    const shareSection = document.getElementById('shareSplitSection');
+    
+    const pctInputs = document.querySelectorAll('.pct-input');
+    const shareInputs = document.querySelectorAll('.share-input');
+    
+    const pctTotalEl = document.getElementById('pctTotal');
+    const shareTotalEl = document.getElementById('shareTotal');
+    
+    const expenseForm = document.getElementById('expenseForm');
+    
+    // Toggle Split Sections
+    function toggleSections() {
+        if (splitEqual.checked) {
+            equalSection.classList.remove('d-none');
+            percentageSection.classList.add('d-none');
+            shareSection.classList.add('d-none');
+        } else if (splitPercentage.checked) {
+            equalSection.classList.add('d-none');
+            percentageSection.classList.remove('d-none');
+            shareSection.classList.add('d-none');
+            updatePctTotal();
+        } else if (splitShare.checked) {
+            equalSection.classList.add('d-none');
+            percentageSection.classList.add('d-none');
+            shareSection.classList.remove('d-none');
+            updateShareTotal();
+        }
+    }
+    
+    splitEqual.addEventListener('change', toggleSections);
+    splitPercentage.addEventListener('change', toggleSections);
+    splitShare.addEventListener('change', toggleSections);
+    
+    // Percentage inputs calculation
+    function updatePctTotal() {
+        let total = 0;
+        pctInputs.forEach(input => {
+            let val = parseFloat(input.value);
+            if (!isNaN(val)) total += val;
+        });
+        pctTotalEl.innerText = total.toFixed(2);
+        
+        if (Math.abs(total - 100) > 0.01) {
+            pctTotalEl.parentElement.className = "fw-bold text-end text-danger";
+        } else {
+            pctTotalEl.parentElement.className = "fw-bold text-end text-success";
+        }
+    }
+    
+    pctInputs.forEach(input => {
+        input.addEventListener('input', updatePctTotal);
+    });
+    
+    // Share inputs calculation
+    function updateShareTotal() {
+        let total = 0;
+        shareInputs.forEach(input => {
+            let val = parseInt(input.value);
+            if (!isNaN(val)) total += val;
+        });
+        shareTotalEl.innerText = total;
+    }
+    
+    shareInputs.forEach(input => {
+        input.addEventListener('input', updateShareTotal);
+    });
+    
+    // Form Validation on Submit
+    expenseForm.addEventListener('submit', function(e) {
+        if (splitPercentage.checked) {
+            let total = 0;
+            pctInputs.forEach(input => {
+                let val = parseFloat(input.value);
+                if (!isNaN(val)) total += val;
+            });
+            if (total < 99.99 || total > 100.01) {
+                alert('Error: The sum of percentages must be exactly 100% (tolerance 99.99% - 100.01%). Current total: ' + total.toFixed(2) + '%');
+                e.preventDefault();
+                return false;
+            }
+        } else if (splitShare.checked) {
+            let total = 0;
+            shareInputs.forEach(input => {
+                let val = parseInt(input.value);
+                if (!isNaN(val)) total += val;
+            });
+            if (total <= 0) {
+                alert('Error: Total shares must be greater than zero.');
+                e.preventDefault();
+                return false;
+            }
+        } else if (splitEqual.checked) {
+            const checkedCount = document.querySelectorAll('input[name="participants"]:checked').length;
+            if (checkedCount === 0) {
+                alert('Error: Please select at least one participant to split equally with.');
+                e.preventDefault();
+                return false;
+            }
+        }
+    });
+});
+</script>
+{% endblock %}

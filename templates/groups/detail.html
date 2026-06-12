@@ -1,0 +1,230 @@
+{% extends "base.html" %}
+
+{% block title %}{{ group.name }} - Splitwise Clone{% endblock %}
+
+{% block content %}
+<!-- Group Header -->
+<div class="card card-premium p-4 mb-4" style="background: linear-gradient(135deg, var(--primary-color) 0%, #173330 100%); color: #ffffff;">
+    <div class="d-flex align-items-center mb-3">
+        <a href="{{ url_for('groups.dashboard') }}" class="btn btn-outline-light btn-sm rounded-circle me-3" style="width: 32px; height: 32px; padding: 0; display: inline-flex; align-items: center; justify-content: center;">
+            <i class="bi bi-arrow-left"></i>
+        </a>
+        <div>
+            <h2 class="fw-bold m-0">{{ group.name }}</h2>
+            <p class="text-white-50 m-0 small">{{ group.description or 'No description' }}</p>
+        </div>
+    </div>
+    
+    <div class="d-flex justify-content-between align-items-center mt-3 pt-3 border-top border-white-10">
+        <div>
+            <span class="small text-white-50 uppercase fw-semibold d-block">YOUR BALANCE IN THIS GROUP</span>
+            <span class="fs-4 fw-bold">
+                {% if current_user_balance > 0 %}
+                    <span class="text-accent">+Rs. {{ "%.2f"|format(current_user_balance) }}</span>
+                {% elif current_user_balance < 0 %}
+                    <span class="text-danger">-Rs. {{ "%.2f"|format(-current_user_balance) }}</span>
+                {% else %}
+                    <span class="text-white-50">Rs. 0.00</span>
+                {% endif %}
+            </span>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{{ url_for('expenses.add_expense', group_id=group.id) }}" class="btn btn-accent px-4 py-2 rounded-pill fw-medium shadow-sm">
+                <i class="bi bi-plus-lg me-1"></i> Add Expense
+            </a>
+            <a href="{{ url_for('settlements.create_settlement', group_id=group.id) }}" class="btn btn-outline-light px-4 py-2 rounded-pill fw-medium">
+                <i class="bi bi-cash me-1"></i> Settle Up
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Expenses & Settlements Feed (Left Column) -->
+    <div class="col-lg-8">
+        <div class="card card-premium">
+            <div class="card-header-premium p-0">
+                <!-- Navigation Tabs -->
+                <ul class="nav nav-tabs border-0" id="groupTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active px-4 py-3 border-0 rounded-0 fw-semibold text-dark" id="expenses-tab" data-bs-toggle="tab" data-bs-target="#expenses-pane" type="button" role="tab" aria-controls="expenses-pane" aria-selected="true">
+                            <i class="bi bi-receipt me-1"></i> Expenses
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link px-4 py-3 border-0 rounded-0 fw-semibold text-dark" id="settlements-tab" data-bs-toggle="tab" data-bs-target="#settlements-pane" type="button" role="tab" aria-controls="settlements-pane" aria-selected="false">
+                            <i class="bi bi-cash-stack me-1"></i> Settlements
+                        </button>
+                    </li>
+                </ul>
+            </div>
+            
+            <div class="tab-content" id="groupTabsContent">
+                <!-- Expenses Tab Pane -->
+                <div class="tab-pane fade show active" id="expenses-pane" role="tabpanel" aria-labelledby="expenses-tab" tabindex="0">
+                    <div class="list-group list-group-flush">
+                        {% if expenses %}
+                            {% for expense in expenses %}
+                                <a href="{{ url_for('expenses.expense_detail', expense_id=expense.id) }}" class="list-group-item list-group-item-premium text-decoration-none text-dark">
+                                    <div class="d-flex align-items-center">
+                                        <div class="avatar-circle me-3">
+                                            {{ expense.description[0]|upper }}
+                                        </div>
+                                        <div class="flex-grow-1">
+                                            <div class="d-flex justify-content-between align-items-baseline">
+                                                <h6 class="fw-bold m-0">{{ expense.description }}</h6>
+                                                <span class="fw-bold">Rs. {{ "%.2f"|format(expense.total_amount) }}</span>
+                                            </div>
+                                            <div class="d-flex justify-content-between align-items-baseline text-muted small mt-1">
+                                                <span>
+                                                    Paid by <strong>{{ expense.paid_by.full_name }}</strong>
+                                                </span>
+                                                <span>{{ expense.created_at.strftime('%b %d, %Y') }}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </a>
+                            {% endfor %}
+                        {% else %}
+                            <div class="p-5 text-center text-muted">
+                                <i class="bi bi-receipt fs-1 d-block mb-2 text-muted"></i>
+                                <p class="mb-0">No expenses recorded for this group yet.</p>
+                                <a href="{{ url_for('expenses.add_expense', group_id=group.id) }}" class="btn btn-link btn-sm text-accent text-decoration-none p-0 mt-2">Add your first expense</a>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <!-- Settlements Tab Pane -->
+                <div class="tab-pane fade" id="settlements-pane" role="tabpanel" aria-labelledby="settlements-tab" tabindex="0">
+                    <div class="list-group list-group-flush">
+                        {% if settlements %}
+                            {% for settlement in settlements %}
+                                <div class="list-group-item list-group-item-premium d-flex align-items-center">
+                                    <div class="avatar-circle avatar-accent me-3" style="background-color: var(--success-color);">
+                                        <i class="bi bi-check-lg"></i>
+                                    </div>
+                                    <div class="flex-grow-1">
+                                        <div class="d-flex justify-content-between align-items-baseline">
+                                            <p class="m-0">
+                                                <strong>{{ settlement.payer.full_name }}</strong> paid <strong>{{ settlement.receiver.full_name }}</strong>
+                                            </p>
+                                            <span class="fw-bold text-success">Rs. {{ "%.2f"|format(settlement.amount) }}</span>
+                                        </div>
+                                        <small class="text-muted">{{ settlement.created_at.strftime('%b %d, %Y at %I:%M %p') }}</small>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="p-5 text-center text-muted">
+                                <i class="bi bi-cash-stack fs-1 d-block mb-2 text-muted"></i>
+                                <p class="mb-0">No settlements logged for this group yet.</p>
+                                <a href="{{ url_for('settlements.create_settlement', group_id=group.id) }}" class="btn btn-link btn-sm text-accent text-decoration-none p-0 mt-2">Log a payment</a>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Simplified Debts & Members (Right Column) -->
+    <div class="col-lg-4">
+        <!-- Simplified Debts Card -->
+        <div class="card card-premium mb-4">
+            <div class="card-header-premium">
+                <h5 class="fw-bold m-0"><i class="bi bi-calculator me-2 text-muted"></i>Simplified Debts</h5>
+            </div>
+            <div class="card-body">
+                {% if simplified_debts %}
+                    <ul class="list-unstyled mb-0">
+                        {% for debt in simplified_debts %}
+                            <li class="d-flex justify-content-between align-items-center mb-3">
+                                <div>
+                                    <strong class="text-dark">{{ debt.from_user.full_name }}</strong>
+                                    <span class="text-muted mx-1">owes</span>
+                                    <strong class="text-dark">{{ debt.to_user.full_name }}</strong>
+                                </div>
+                                <span class="badge bg-danger rounded-pill px-3">Rs. {{ "%.2f"|format(debt.amount) }}</span>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <div class="text-center p-3 text-muted">
+                        <i class="bi bi-emoji-smile fs-2 text-success d-block mb-2"></i>
+                        <span class="small fw-medium text-success">Everyone is settled up!</span>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Group Members Card -->
+        <div class="card card-premium">
+            <div class="card-header-premium d-flex justify-content-between align-items-center">
+                <h5 class="fw-bold m-0"><i class="bi bi-person-fill me-2 text-muted"></i>Group Members</h5>
+                <span class="badge bg-secondary rounded-pill">{{ members_data|length }}</span>
+            </div>
+            <div class="card-body p-0">
+                <ul class="list-group list-group-flush">
+                    {% for item in members_data %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center border-0 px-3 py-2">
+                            <div class="d-flex align-items-center">
+                                <span class="avatar-circle me-2" style="width: 32px; height: 32px; font-size: 0.85rem;">
+                                    {{ item.user.full_name[0]|upper }}
+                                </span>
+                                <div>
+                                    <span class="fw-medium text-dark">{{ item.user.full_name }}</span>
+                                    {% if item.user.id == group.creator_id %}
+                                        <span class="badge bg-dark rounded-pill ms-1" style="font-size: 0.65rem;">Creator</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            
+                            <div class="d-flex align-items-center">
+                                <span class="small me-2">
+                                    {% if item.balance > 0 %}
+                                        <span class="text-success fw-semibold">owes +Rs. {{ "%.2f"|format(item.balance) }}</span>
+                                    {% elif item.balance < 0 %}
+                                        <span class="text-danger fw-semibold">owes -Rs. {{ "%.2f"|format(-item.balance) }}</span>
+                                    {% else %}
+                                        <span class="text-muted">settled</span>
+                                    {% endif %}
+                                </span>
+                                
+                                <!-- Remove Member Option (Only group creator can do this, cannot remove self) -->
+                                {% if current_user.id == group.creator_id and item.user.id != current_user.id %}
+                                    <form action="{{ url_for('groups.remove_member', group_id=group.id, user_id=item.user.id) }}" method="POST" onsubmit="return confirm('Are you sure you want to remove {{ item.user.full_name }}?');" class="m-0">
+                                        <button type="submit" class="btn btn-outline-danger btn-sm border-0 p-1" title="Remove member">
+                                            <i class="bi bi-trash3-fill"></i>
+                                        </button>
+                                    </form>
+                                {% endif %}
+                            </div>
+                        </li>
+                    {% endfor %}
+                </ul>
+                
+                <!-- Add Member Form dropdown -->
+                <div class="p-3 border-top bg-light">
+                    <h6 class="fw-bold mb-2 small text-muted">ADD MEMBER</h6>
+                    {% if all_registered_users %}
+                        <form action="{{ url_for('groups.add_member', group_id=group.id) }}" method="POST" class="d-flex gap-2">
+                            <select name="user_id" class="form-select form-select-sm" required>
+                                <option value="" disabled selected>Select user...</option>
+                                {% for u in all_registered_users %}
+                                    <option value="{{ u.id }}">{{ u.full_name }} ({{ u.email }})</option>
+                                {% endfor %}
+                            </select>
+                            <button type="submit" class="btn btn-accent btn-sm px-3">
+                                Add
+                            </button>
+                        </form>
+                    {% else %}
+                        <p class="text-muted m-0 small">No other registered users available to add.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
