@@ -55,16 +55,14 @@ class GroupMember(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     group_id = db.Column(db.Integer, db.ForeignKey('groups.id', ondelete='CASCADE'), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    joined_at = db.Column(db.Date, nullable=False, default=lambda: datetime.now(timezone.utc).date())
+    left_at = db.Column(db.Date, nullable=True)
     created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
     updated_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
 
     # Relationships
     group = db.relationship('Group', back_populates='members')
     user = db.relationship('User', back_populates='memberships')
-
-    __table_args__ = (
-        db.UniqueConstraint('group_id', 'user_id', name='uq_group_user'),
-    )
 
     def __repr__(self):
         return f"<GroupMember Group:{self.group_id} User:{self.user_id}>"
@@ -79,7 +77,11 @@ class Expense(db.Model):
     created_by_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
     description = db.Column(db.String(255), nullable=False)
     total_amount = db.Column(db.Numeric(10, 2), nullable=False)
-    split_type = db.Column(db.String(20), nullable=False) # 'equal', 'percentage', 'share'
+    original_amount = db.Column(db.Numeric(10, 2), nullable=False)
+    currency = db.Column(db.String(3), nullable=False, default='INR')
+    exchange_rate = db.Column(db.Numeric(10, 6), nullable=False, default=1.0)
+    date = db.Column(db.Date, nullable=False, default=lambda: datetime.now(timezone.utc).date())
+    split_type = db.Column(db.String(20), nullable=False) # 'equal', 'percentage', 'share', 'exact'
     created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
     updated_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
 
@@ -122,6 +124,10 @@ class Settlement(db.Model):
     payer_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
     receiver_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
     amount = db.Column(db.Numeric(10, 2), nullable=False)
+    original_amount = db.Column(db.Numeric(10, 2), nullable=False)
+    currency = db.Column(db.String(3), nullable=False, default='INR')
+    exchange_rate = db.Column(db.Numeric(10, 6), nullable=False, default=1.0)
+    date = db.Column(db.Date, nullable=False, default=lambda: datetime.now(timezone.utc).date())
     created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
     updated_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
 
@@ -150,3 +156,15 @@ class Comment(db.Model):
 
     def __repr__(self):
         return f"<Comment Expense:{self.expense_id} User:{self.user_id}>"
+
+class ExchangeRate(db.Model):
+    __tablename__ = 'exchange_rates'
+
+    id = db.Column(db.Integer, primary_key=True)
+    from_currency = db.Column(db.String(3), nullable=False)
+    to_currency = db.Column(db.String(3), nullable=False)
+    rate = db.Column(db.Numeric(10, 6), nullable=False)
+    date = db.Column(db.Date, nullable=True) # None means fallback rate
+
+    def __repr__(self):
+        return f"<ExchangeRate {self.from_currency} -> {self.to_currency}: {self.rate}>"

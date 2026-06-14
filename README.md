@@ -1,14 +1,14 @@
-# Splitwise Clone
+# Splitwise Clone (V2)
 
-A functional, premium web-based Splitwise clone designed for college students to split food, travel, and accommodation expenses. The application includes user authentication, group management, equal/unequal expense splitting, dynamic debt-simplification calculations, settlement logging, and comment threads.
+A robust, premium web-based Splitwise clone designed for college students to split food, travel, and accommodation expenses. The application includes user authentication, group management with temporal memberships, equal/unequal expense splitting, multi-currency support, a smart CSV importer, dynamic debt simplification, settlement logging, comments, and auditable ledgers.
 
 ---
 
-## 🚀 Final Implementation Summary
+## 🚀 Implementation Summary
 
-* **Number of Database Tables**: 7 tables (`users`, `groups`, `group_members`, `expenses`, `expense_splits`, `settlements`, `comments`)
-* **Number of API Endpoints**: 19 routes
-* **Number of Frontend Pages**: 8 server-rendered views
+* **Number of Database Tables**: 8 tables (`users`, `groups`, `group_members`, `expenses`, `expense_splits`, `settlements`, `comments`, `exchange_rates`)
+* **Number of API Endpoints**: 23 routes
+* **Number of Frontend Pages**: 11 server-rendered views
 * **Authentication Method**: Session-based cookie authentication using `Flask-Login` and `Flask-Bcrypt` (passwords securely hashed)
 * **Deployment Target**: Render
 * **Database Provider**: Supabase PostgreSQL
@@ -18,15 +18,33 @@ A functional, premium web-based Splitwise clone designed for college students to
 ## ✨ Features
 
 1. **User Authentication**: Secure registration, login, and logout.
-2. **Group Management**: Create groups, auto-join as a member, add existing registered users via a dropdown selector, and remove group members (creator-only).
-3. **Expense splitting**:
-   * **Equally**: Divides the total bill equally among selected group members.
-   * **Percentages**: Assigns custom percentages to members (validated to sum to 100%).
+2. **Group Management & Temporal Membership**:
+   * Create groups, auto-join as a member.
+   * Add members via dropdown selection.
+   * Remove members (creator-only) by setting a `left_at` date interval instead of deleting records.
+   * Re-join group support by treating membership as a historical set of `[joined_at, left_at]` date intervals.
+   * Expenses only split among members active on the expense date.
+3. **Advanced Expense Splitting**:
+   * **Equally**: Divides the total bill equally among selected active group members.
+   * **Percentages**: Assigns custom percentages to members (validated to sum to 100% with minor tolerance).
    * **Shares**: Splits using ratio proportions (e.g. 2 shares vs 1 share).
+   * **Exact/Unequal**: Splits by custom exact amounts.
    * *Rounding Math*: Rounding differences are automatically adjusted on the last participant's balance.
-4. **Greedy Debt Simplification**: Computes the net balance for each user on the fly and simplifies the debt matrix to minimize total payments ("Who owes whom").
-5. **Payment Settlements**: Log payments between members to offset outstanding debts.
-6. **Comments Feed**: Post questions or notes on any group expense timeline.
+4. **Multi-Currency Support**:
+   * Track transactions in **INR** (base currency) and **USD**.
+   * Fetches exchange rates dynamically from the `ExchangeRate` table.
+   * All non-base transactions are converted to INR on the fly using stored rates for debt calculations and balances.
+5. **Robust CSV Importer**:
+   * Upload `Expenses Export.csv` directly.
+   * Parses various date and currency formats (defaults missing fields to INR/current date).
+   * Run dry-run analysis showing anomalies (suspected duplicates, mathematical percentage splits mismatch, settlements masquerading as expenses).
+   * Review interface resolves unrecognized user names to registered users or auto-creates stub accounts, allowing bulk toggles of rows before committing inside a SQL transaction.
+6. **Auditable Ledgers**:
+   * Transparent audit sheets for every group member.
+   * Traces all splits and payments chronologically with exchange rate references and a running net balance.
+7. **Greedy Debt Simplification**: Computes net balances on the fly and simplifies the debt matrix to minimize total payments ("Who owes whom").
+8. **Payment Settlements**: Log payments between members to offset outstanding debts.
+9. **Comments Feed**: Post questions or notes on any group expense timeline.
 
 ---
 
@@ -37,6 +55,7 @@ A functional, premium web-based Splitwise clone designed for college students to
 * **ORM**: SQLAlchemy (via Flask-SQLAlchemy 3.1.1)
 * **Frontend**: HTML5 + Server-Rendered Jinja2 Templates
 * **Styling**: Bootstrap 5 + HSL Mint/Forest Green CSS Custom variables
+* **Package Manager**: Pip
 
 ---
 
@@ -71,7 +90,7 @@ python -m venv venv
 ```
 
 ### 3. Install Dependencies
-Install all packages from `requirements.txt` (which has been updated to support Python 3.13):
+Install all packages from `requirements.txt`:
 
 ```powershell
 pip install -r requirements.txt
@@ -89,7 +108,7 @@ Open your browser and navigate to: [http://127.0.0.1:5000](http://127.0.0.1:5000
 
 ## 🧪 Testing
 
-The project includes an automated unit/integration test suite using an in-memory SQLite setup to test splitting calculations and debt simplification logic:
+The project includes an automated unit/integration test suite using an in-memory SQLite setup to test splitting calculations, temporal boundaries, and currency exchange rates:
 
 ```powershell
 python -m unittest tests/test_algorithms.py
@@ -101,11 +120,11 @@ python -m unittest tests/test_algorithms.py
 
 ```
 SplitwiseClone/
-├── routes/               # Controller blueprints (auth, groups, expenses, settlements, comments)
+├── routes/               # Controller blueprints (auth, groups, expenses, settlements, comments, importer)
 ├── static/css/styles.css # Premium styling rules
-├── templates/            # Jinja2 layouts
+├── templates/            # Jinja2 layouts and components
 ├── tests/                # Automated test suite
-├── app.py                # App factory bootstrap
+├── app.py                # App factory bootstrap and database auto-migrations
 ├── models.py             # ORM models (SQLAlchemy)
 ├── AI_CONTEXT.md         # Source of truth specifications
 ├── BUILD_PLAN.md         # Design decisions and tradeoffs
@@ -128,6 +147,11 @@ SplitwiseClone/
   * `GET /groups/<group_id>` - Group feed and debt calculations
   * `POST /groups/<group_id>/add-member` - Join a member
   * `POST /groups/<group_id>/remove-member/<user_id>` - Remove a member
+  * `GET /groups/<group_id>/members/<user_id>/ledger` - Auditable member ledger
+* **CSV Importer**:
+  * `GET /groups/<group_id>/import` - File upload form
+  * `POST /groups/<group_id>/import/analyze` - Anomaly analysis report
+  * `POST /groups/<group_id>/import/confirm` - Confirms and writes mapped records
 * **Expenses**:
   * `GET /groups/<group_id>/expenses/add` & `POST /groups/<group_id>/expenses/add` - Add expense
   * `GET /expenses/<expense_id>` - Expense details & splits
@@ -136,17 +160,3 @@ SplitwiseClone/
   * `GET /groups/<group_id>/settle` & `POST /groups/<group_id>/settle` - Record payment
 * **Comments**:
   * `POST /expenses/<expense_id>/comments` - Add expense comment
-
----
-
-## ⚠️ Assumptions and Limitations
-
-1. **Floating Precision**: All calculations use Python's `Decimal` type. When split fractions do not divide evenly (e.g. Rs. 100 split 3 ways), the rounding remainder is added to the last participant.
-2. **On-the-fly Computations**: Net balances and transaction simplifications are computed dynamically on page load. This simplifies architecture and works well for group scales typical of roommates.
-3. **Group Scope**: Direct payments/expenses between individuals outside of a group boundaries are not supported.
-
----
-
-## 🤖 AI Collaboration
-
-This application was developed in pair programming with **Antigravity**, an agentic AI coding assistant designed by Google DeepMind. Scope control, SQL connection sanitization, and rounding rules were jointly verified through automated Playwright and unittest workflows.

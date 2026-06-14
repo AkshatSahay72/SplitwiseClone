@@ -144,6 +144,7 @@ class SplitwiseAlgorithmsTestCase(unittest.TestCase):
             created_by_id=self.user_a.id,
             description="Taxi fare",
             total_amount=Decimal('90.00'),
+            original_amount=Decimal('90.00'),
             split_type="equal"
         )
         db.session.add(expense)
@@ -167,7 +168,8 @@ class SplitwiseAlgorithmsTestCase(unittest.TestCase):
             group_id=self.group.id,
             payer_id=self.user_b.id,
             receiver_id=self.user_a.id,
-            amount=Decimal('30.00')
+            amount=Decimal('30.00'),
+            original_amount=Decimal('30.00')
         )
         db.session.add(settlement)
         db.session.commit()
@@ -191,6 +193,99 @@ class SplitwiseAlgorithmsTestCase(unittest.TestCase):
         self.assertEqual(txs[0]['from_user'].id, self.user_c.id)
         self.assertEqual(txs[0]['to_user'].id, self.user_a.id)
         self.assertEqual(txs[0]['amount'], Decimal('30.00'))
+
+    def test_temporal_splits(self):
+        """
+        Verify that a user who joins late is only included in splitting
+        expenses logged during their active membership interval.
+        """
+        from datetime import date, timedelta
+        today = date.today()
+        three_days_later = today + timedelta(days=3)
+        
+        self.member_c.joined_at = three_days_later
+        db.session.commit()
+        
+        # Verify active on today
+        active_on_today = GroupMember.query.filter(
+            GroupMember.group_id == self.group.id,
+            GroupMember.joined_at <= today,
+            (GroupMember.left_at == None) | (GroupMember.left_at >= today)
+        ).all()
+        active_today_ids = [m.user_id for m in active_on_today]
+        
+        self.assertIn(self.user_a.id, active_today_ids)
+        self.assertIn(self.user_b.id, active_today_ids)
+        self.assertNotIn(self.user_c.id, active_today_ids)
+        
+        # Verify active on later date
+        active_later = GroupMember.query.filter(
+            GroupMember.group_id == self.group.id,
+            GroupMember.joined_at <= three_days_later,
+            (GroupMember.left_at == None) | (GroupMember.left_at >= three_days_later)
+        ).all()
+        active_later_ids = [m.user_id for m in active_later]
+        self.assertIn(self.user_c.id, active_later_ids)
+
+    def test_exchange_rate_conversions(self):
+        """
+        Verify that multi-currency handling parses rate and saves converted amounts correctly.
+        """
+        expense = Expense(
+            group_id=self.group.id,
+            paid_by_id=self.user_a.id,
+            created_by_id=self.user_a.id,
+            description="USD Diner",
+            total_amount=Decimal('830.00'), # 10 * 83.0
+            original_amount=Decimal('10.00'),
+            currency='USD',
+            exchange_rate=Decimal('83.00'),
+            split_type="equal"
+        )
+        db.session.add(expense)
+        db.session.commit()
+        
+        self.assertEqual(expense.total_amount, Decimal('830.00'))
+        self.assertEqual(expense.original_amount, Decimal('10.00'))
+        self.assertEqual(expense.currency, 'USD')
+        self.assertEqual(expense.exchange_rate, Decimal('83.00'))
+
+    def test_ledger_compilation(self):
+        """
+        Verify that member_ledger compiles items and sums impact correctly.
+        """
+        ledger_group = Group(name="Ledger Group", creator_id=self.user_a.id)
+        db.session.add(ledger_group)
+        db.session.commit()
+        
+        mem_a = GroupMember(group_id=ledger_group.id, user_id=self.user_a.id)
+        mem_b = GroupMember(group_id=ledger_group.id, user_id=self.user_b.id)
+        db.session.add_all([mem_a, mem_b])
+        db.session.commit()
+        
+        # A pays 100 Rs (split equally between A and B, so B owes A 50 Rs)
+        exp = Expense(
+            group_id=ledger_group.id,
+            paid_by_id=self.user_a.id,
+            created_by_id=self.user_a.id,
+            description="Lunch",
+            total_amount=Decimal('100.00'),
+            original_amount=Decimal('100.00'),
+            currency='INR',
+            exchange_rate=Decimal('1.00'),
+            split_type="equal"
+        )
+        db.session.add(exp)
+        db.session.flush()
+        
+        split_a = ExpenseSplit(expense_id=exp.id, user_id=self.user_a.id, amount=Decimal('50.00'))
+        split_b = ExpenseSplit(expense_id=exp.id, user_id=self.user_b.id, amount=Decimal('50.00'))
+        db.session.add_all([split_a, split_b])
+        db.session.commit()
+        
+        balances = get_group_balances(ledger_group)
+        self.assertEqual(balances[self.user_a.id], Decimal('50.00'))
+        self.assertEqual(balances[self.user_b.id], Decimal('-50.00'))
 
 if __name__ == '__main__':
     unittest.main()

@@ -20,12 +20,35 @@
                     <input type="text" name="description" class="form-control form-control-premium" id="expenseDesc" placeholder="e.g. Dinner, Cab Fare, Groceries" required>
                 </div>
                 
+                <div class="row mb-3">
+                    <!-- Date -->
+                    <div class="col-md-4">
+                        <label for="expenseDate" class="form-label fw-semibold">Date</label>
+                        <input type="date" name="date" class="form-control form-control-premium" id="expenseDate" required>
+                    </div>
+
+                    <!-- Currency -->
+                    <div class="col-md-4">
+                        <label for="expenseCurrency" class="form-label fw-semibold">Currency</label>
+                        <select name="currency" class="form-select form-control-premium" id="expenseCurrency" required>
+                            <option value="INR" selected>INR (Rs.)</option>
+                            <option value="USD">USD ($)</option>
+                        </select>
+                    </div>
+
+                    <!-- Exchange Rate -->
+                    <div class="col-md-4">
+                        <label for="exchangeRate" class="form-label fw-semibold">Exchange Rate (to INR)</label>
+                        <input type="number" step="0.000001" min="0.000001" name="exchange_rate" class="form-control form-control-premium" id="exchangeRate" value="1.0" readonly required>
+                    </div>
+                </div>
+
                 <div class="row mb-4">
                     <!-- Amount -->
                     <div class="col-md-6">
-                        <label for="expenseAmount" class="form-label fw-semibold">Total Amount (Rs.)</label>
+                        <label for="expenseAmount" class="form-label fw-semibold">Total Amount</label>
                         <div class="input-group">
-                            <span class="input-group-text bg-light border-2 border-end-0" style="border-radius: var(--border-radius-md) 0 0 var(--border-radius-md);">Rs.</span>
+                            <span class="input-group-text bg-light border-2 border-end-0" id="currencySymbol" style="border-radius: var(--border-radius-md) 0 0 var(--border-radius-md);">Rs.</span>
                             <input type="number" step="0.01" name="total_amount" class="form-control form-control-premium border-start-0" id="expenseAmount" placeholder="0.00" required>
                         </div>
                     </div>
@@ -34,7 +57,7 @@
                     <div class="col-md-6">
                         <label for="paidBy" class="form-label fw-semibold">Paid By</label>
                         <select name="paid_by_id" class="form-select form-control-premium" id="paidBy" required>
-                            {% for member in group.members %}
+                            {% for member in active_members %}
                                 <option value="{{ member.user.id }}" {% if member.user.id == current_user.id %}selected{% endif %}>
                                     {{ member.user.full_name }} {% if member.user.id == current_user.id %}(You){% endif %}
                                 </option>
@@ -68,7 +91,7 @@
                     <div id="equalSplitSection" class="split-section">
                         <h6 class="fw-bold mb-3 text-muted">SELECT PARTICIPANTS TO SPLIT WITH:</h6>
                         <div class="row g-2">
-                            {% for member in group.members %}
+                            {% for member in active_members %}
                                 <div class="col-md-6">
                                     <div class="form-check card p-2 flex-row align-items-center gap-2 border-0 shadow-sm" style="border-radius: var(--border-radius-md);">
                                         <input class="form-check-input ms-0 mt-0" type="checkbox" name="participants" value="{{ member.user.id }}" id="userCheck_{{ member.user.id }}" checked>
@@ -96,7 +119,7 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {% for member in group.members %}
+                                    {% for member in active_members %}
                                         <tr>
                                             <td>
                                                 <div class="d-flex align-items-center">
@@ -137,7 +160,7 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {% for member in group.members %}
+                                    {% for member in active_members %}
                                         <tr>
                                             <td>
                                                 <div class="d-flex align-items-center">
@@ -191,6 +214,30 @@ document.addEventListener('DOMContentLoaded', function() {
     const shareTotalEl = document.getElementById('shareTotal');
     
     const expenseForm = document.getElementById('expenseForm');
+
+    // Date pre-population
+    const dateInput = document.getElementById('expenseDate');
+    if (dateInput && !dateInput.value) {
+        const today = new Date().toISOString().split('T')[0];
+        dateInput.value = today;
+    }
+
+    // Currency and Exchange Rate handler
+    const currencySelect = document.getElementById('expenseCurrency');
+    const currencySymbol = document.getElementById('currencySymbol');
+    const exchangeRateInput = document.getElementById('exchangeRate');
+
+    currencySelect.addEventListener('change', function() {
+        if (this.value === 'USD') {
+            currencySymbol.innerText = '$';
+            exchangeRateInput.value = '83.00';
+            exchangeRateInput.readOnly = false;
+        } else {
+            currencySymbol.innerText = 'Rs.';
+            exchangeRateInput.value = '1.0';
+            exchangeRateInput.readOnly = true;
+        }
+    });
     
     // Toggle Split Sections
     function toggleSections() {

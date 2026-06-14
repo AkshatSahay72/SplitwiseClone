@@ -1,0 +1,178 @@
+{% extends "base.html" %}
+
+{% block title %}Review Import - Splitwise Clone{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card card-premium p-4 mb-4">
+            <div class="d-flex align-items-center mb-3 border-bottom pb-3">
+                <a href="{{ url_for('importer.import_csv_view', group_id=group.id) }}" class="btn btn-outline-secondary btn-sm rounded-circle me-3" style="width: 32px; height: 32px; padding: 0; display: inline-flex; align-items: center; justify-content: center;">
+                    <i class="bi bi-arrow-left"></i>
+                </a>
+                <h3 class="fw-bold m-0"><i class="bi bi-shield-check text-accent me-2"></i>Review CSV Import - {{ group.name }}</h3>
+            </div>
+
+            <form action="{{ url_for('importer.confirm_import', group_id=group.id) }}" method="POST" id="confirmImportForm">
+                
+                <!-- 1. Unresolved User Mapping Section -->
+                {% if unresolved_names %}
+                    <div class="card border-warning bg-warning-subtle p-3 mb-4 rounded-3">
+                        <h5 class="fw-bold text-warning-emphasis mb-3">
+                            <i class="bi bi-person-exclamation me-2"></i>Unresolved Members Mapping
+                        </h5>
+                        <p class="small text-warning-emphasis">The CSV contains names that are either not registered users or not currently members of this group. Please resolve them below:</p>
+                        
+                        <div class="row g-3">
+                            {% for u in unresolved_names %}
+                                <div class="col-12 col-md-6">
+                                    <div class="card p-3 border-0 shadow-sm bg-white rounded-3">
+                                        <div class="d-flex align-items-center justify-content-between mb-2">
+                                            <span class="fw-bold text-dark">{{ u.csv_name }}</span>
+                                            <span class="badge bg-warning text-dark small">Unresolved</span>
+                                        </div>
+                                        
+                                        <!-- Actions -->
+                                        <div class="mb-2">
+                                            <div class="form-check form-check-inline">
+                                                <input class="form-check-input action-radio" type="radio" name="action_{{ u.csv_name }}" id="map_{{ u.csv_name }}" value="map" checked data-name="{{ u.csv_name }}">
+                                                <label class="form-check-label small fw-semibold" for="map_{{ u.csv_name }}">Map to existing user</label>
+                                            </div>
+                                            <div class="form-check form-check-inline">
+                                                <input class="form-check-input action-radio" type="radio" name="action_{{ u.csv_name }}" id="create_{{ u.csv_name }}" value="create" data-name="{{ u.csv_name }}">
+                                                <label class="form-check-label small fw-semibold" for="create_{{ u.csv_name }}">Create stub user</label>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Dropdown for existing users -->
+                                        <div class="user-select-container" id="select_container_{{ u.csv_name }}">
+                                            <label class="form-label small text-muted mb-1">Select registered user:</label>
+                                            <select name="user_id_{{ u.csv_name }}" class="form-select form-select-sm">
+                                                <option value="" disabled selected>-- Select User --</option>
+                                                {% for reg in all_users %}
+                                                    <option value="{{ reg.id }}" {% if u.found_user_id == reg.id %}selected{% endif %}>
+                                                        {{ reg.full_name }} ({{ reg.email }})
+                                                    </option>
+                                                {% endfor %}
+                                            </select>
+                                        </div>
+                                        <div class="stub-note-container d-none" id="stub_container_{{ u.csv_name }}">
+                                            <span class="text-muted small">Will create a stub login account for {{ u.csv_name }}.</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                {% endif %}
+
+                <!-- 2. Parsed Transactions Table -->
+                <h5 class="fw-bold mb-3"><i class="bi bi-list-check text-accent me-2"></i>Parsed Transactions</h5>
+                <div class="table-responsive mb-4 rounded-3 shadow-sm border">
+                    <table class="table table-hover align-middle bg-white mb-0">
+                        <thead class="table-dark">
+                            <tr>
+                                <th style="width: 50px;" class="text-center">
+                                    <input type="checkbox" id="selectAllRows" checked class="form-check-input">
+                                </th>
+                                <th style="width: 100px;">Date</th>
+                                <th>Description</th>
+                                <th style="width: 120px;">Payer</th>
+                                <th style="width: 130px; text-align: right;">Amount</th>
+                                <th style="width: 130px; text-align: right;">Converted</th>
+                                <th style="width: 100px;">Split Type</th>
+                                <th>Anomalies / Report</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for r in parsed_rows %}
+                                <tr class="{% if r.is_settlement %}table-info-subtle{% endif %}">
+                                    <td class="text-center">
+                                        {% if 'error' not in r.anomalies|map(attribute='type') %}
+                                            <input type="checkbox" name="row_checked_{{ r.row_idx }}" class="form-check-input row-checkbox" checked>
+                                        {% else %}
+                                            <span class="text-danger small fw-bold" title="Unresolved errors present"><i class="bi bi-x-circle-fill"></i></span>
+                                        {% endif %}
+                                    </td>
+                                    <td><small class="fw-medium">{{ r.date }}</small></td>
+                                    <td>
+                                        <div class="fw-bold">{{ r.description }}</div>
+                                        {% if r.notes %}
+                                            <div class="text-muted small italic" style="font-size: 0.75rem;"><i class="bi bi-chat-left-text me-1"></i>{{ r.notes }}</div>
+                                        {% endif %}
+                                    </td>
+                                    <td><span class="badge bg-secondary">{{ r.paid_by }}</span></td>
+                                    <td class="text-end fw-semibold text-nowrap">{{ r.amount }} {{ r.currency }}</td>
+                                    <td class="text-end fw-bold text-accent text-nowrap">Rs. {{ r.converted_amount }}</td>
+                                    <td>
+                                        <span class="badge rounded-pill {% if r.is_settlement %}bg-info text-dark{% else %}bg-light text-dark{% endif %} small text-uppercase">
+                                            {{ r.split_type }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        {% if r.anomalies %}
+                                            {% for a in r.anomalies %}
+                                                <div class="d-flex align-items-center mb-1">
+                                                    <span class="badge bg-{% if a.type == 'error' %}danger{% elif a.type == 'warning' %}warning text-dark{% else %}info{% endif %} me-2" style="font-size: 0.65rem;">
+                                                        {{ a.type|upper }}
+                                                    </span>
+                                                    <span class="small text-dark text-break">{{ a.message }}</span>
+                                                </div>
+                                            {% endfor %}
+                                        {% else %}
+                                            <span class="badge bg-success-subtle text-success small"><i class="bi bi-check-circle-fill me-1"></i>Ready</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- 3. Form Submit / Cancel Actions -->
+                <div class="d-flex gap-3 mt-4">
+                    <button type="submit" class="btn btn-accent px-5 py-2 fw-medium rounded-3 flex-grow-1">
+                        <i class="bi bi-file-earmark-arrow-up-fill me-1"></i> Complete Import
+                    </button>
+                    <a href="{{ url_for('groups.group_detail', group_id=group.id) }}" class="btn btn-outline-secondary px-4 py-2 rounded-3 fw-medium">
+                        Cancel
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const selectAllCheckbox = document.getElementById('selectAllRows');
+    const rowCheckboxes = document.querySelectorAll('.row-checkbox');
+    
+    selectAllCheckbox.addEventListener('change', function() {
+        rowCheckboxes.forEach(cb => {
+            cb.checked = selectAllCheckbox.checked;
+        });
+    });
+    
+    // Toggle mapping UI based on map/create action selected
+    const actionRadios = document.querySelectorAll('.action-radio');
+    actionRadios.forEach(radio => {
+        radio.addEventListener('change', function() {
+            const name = this.getAttribute('data-name');
+            const selectContainer = document.getElementById(`select_container_${name}`);
+            const stubContainer = document.getElementById(`stub_container_${name}`);
+            
+            if (this.value === 'map') {
+                selectContainer.classList.remove('d-none');
+                stubContainer.classList.add('d-none');
+            } else {
+                selectContainer.classList.add('d-none');
+                stubContainer.classList.remove('d-none');
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

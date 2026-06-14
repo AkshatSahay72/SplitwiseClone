@@ -184,24 +184,40 @@ def group_detail(group_id):
     # Simplify debts
     simplified_debts = simplify_debts(balances, user_map)
     
-    # Prepare member list with balance details
+    # Prepare member list with balance details (aggregating multiple intervals if a member rejoined)
     members_data = []
+    seen_users = set()
     for m in group.members:
+        if m.user_id in seen_users:
+            continue
+        seen_users.add(m.user_id)
         user_info = user_map.get(m.user_id)
         if user_info:
+            # Query all intervals
+            intervals = GroupMember.query.filter_by(group_id=group_id, user_id=m.user_id).all()
+            is_active = any(um.left_at is None for um in intervals)
+            formatted_intervals = []
+            for um in intervals:
+                joined_str = um.joined_at.strftime('%b %d, %Y')
+                left_str = um.left_at.strftime('%b %d, %Y') if um.left_at else 'Present'
+                formatted_intervals.append(f"{joined_str} to {left_str}")
+                
             members_data.append({
                 'user': user_info,
-                'balance': balances.get(m.user_id, Decimal('0.00'))
+                'balance': balances.get(m.user_id, Decimal('0.00')),
+                'is_active': is_active,
+                'intervals': formatted_intervals
             })
             
-    # All registered users for the "Add Member" dropdown (except already in group)
-    all_registered_users = User.query.filter(~User.id.in_(member_user_ids)).order_by(User.full_name).all()
+    # All registered users for the "Add Member" dropdown (except currently active in group)
+    active_member_ids = [m.user_id for m in group.members if m.left_at is None]
+    all_registered_users = User.query.filter(~User.id.in_(active_member_ids)).order_by(User.full_name).all()
 
     # Expenses in this group (latest first)
-    expenses = Expense.query.filter_by(group_id=group_id).order_by(Expense.created_at.desc()).all()
+    expenses = Expense.query.filter_by(group_id=group_id).order_by(Expense.date.desc(), Expense.created_at.desc()).all()
     
     # Settlements in this group (latest first)
-    settlements = Settlement.query.filter_by(group_id=group_id).order_by(Settlement.created_at.desc()).all()
+    settlements = Settlement.query.filter_by(group_id=group_id).order_by(Settlement.date.desc(), Settlement.created_at.desc()).all()
 
     # Current user's net balance in this group
     current_user_balance = balances.get(current_user.id, Decimal('0.00'))
@@ -236,13 +252,18 @@ def add_member(group_id):
         flash('Selected user does not exist.', 'danger')
         return redirect(url_for('groups.group_detail', group_id=group_id))
         
-    # Check if already a member
-    existing = GroupMember.query.filter_by(group_id=group_id, user_id=user_to_add.id).first()
-    if existing:
-        flash('User is already a member of this group.', 'warning')
+    # Check if already has an active membership
+    existing_active = GroupMember.query.filter_by(group_id=group_id, user_id=user_to_add.id, left_at=None).first()
+    if existing_active:
+        flash('User is already an active member of this group.', 'warning')
         return redirect(url_for('groups.group_detail', group_id=group_id))
         
-    new_member = GroupMember(group_id=group_id, user_id=user_to_add.id)
+    from datetime import datetime, timezone
+    new_member = GroupMember(
+        group_id=group_id, 
+        user_id=user_to_add.id,
+        joined_at=datetime.now(timezone.utc).date()
+    )
     db.session.add(new_member)
     db.session.commit()
     
@@ -264,13 +285,117 @@ def remove_member(group_id, user_id):
         flash('You cannot remove yourself from the group. You must transfer group ownership first.', 'danger')
         return redirect(url_for('groups.group_detail', group_id=group_id))
         
-    member = GroupMember.query.filter_by(group_id=group_id, user_id=user_id).first()
+    member = GroupMember.query.filter_by(group_id=group_id, user_id=user_id, left_at=None).first()
     if not member:
-        flash('User is not a member of this group.', 'danger')
+        flash('User is not an active member of this group.', 'danger')
         return redirect(url_for('groups.group_detail', group_id=group_id))
         
-    db.session.delete(member)
+    from datetime import datetime, timezone
+    member.left_at = datetime.now(timezone.utc).date()
     db.session.commit()
     
     flash('Member removed successfully.', 'success')
     return redirect(url_for('groups.group_detail', group_id=group_id))
+
+@groups_bp.route('/groups/<int:group_id>/members/<int:user_id>/ledger')
+@login_required
+def member_ledger(group_id, user_id):
+    # Verify current user is member of the group
+    membership = GroupMember.query.filter_by(group_id=group_id, user_id=current_user.id).first()
+    if not membership:
+        flash('Unauthorized.', 'danger')
+        return redirect(url_for('groups.dashboard'))
+        
+    group = Group.query.get_or_404(group_id)
+    target_user = User.query.get_or_404(user_id)
+    
+    # 1. Fetch all transactions involving target_user in this group
+    # A. Expenses paid by target_user
+    paid_expenses = Expense.query.filter_by(group_id=group_id, paid_by_id=user_id).all()
+    # B. Splits owed by target_user
+    owed_splits = ExpenseSplit.query.join(Expense).filter(Expense.group_id == group_id, ExpenseSplit.user_id == user_id).all()
+    # C. Settlements sent by target_user (payer)
+    sent_settlements = Settlement.query.filter_by(group_id=group_id, payer_id=user_id).all()
+    # D. Settlements received by target_user (receiver)
+    received_settlements = Settlement.query.filter_by(group_id=group_id, receiver_id=user_id).all()
+    
+    # 2. Combine into ledger items list
+    ledger_items = []
+    
+    for exp in paid_expenses:
+        ledger_items.append({
+            'date': exp.date,
+            'created_at': exp.created_at,
+            'desc': exp.description,
+            'type': 'Expense Paid',
+            'orig_amount': exp.original_amount,
+            'currency': exp.currency,
+            'rate': exp.exchange_rate,
+            'amount_inr': exp.total_amount,
+            'impact': exp.total_amount, # Positive impact
+            'ref_id': exp.id,
+            'ref_type': 'expense'
+        })
+        
+    for split in owed_splits:
+        exp = split.expense
+        ledger_items.append({
+            'date': exp.date,
+            'created_at': exp.created_at,
+            'desc': f"Share of: {exp.description}",
+            'type': 'Expense Shared/Owed',
+            'orig_amount': (split.amount / exp.exchange_rate).quantize(Decimal('0.01')) if exp.exchange_rate else split.amount,
+            'currency': exp.currency,
+            'rate': exp.exchange_rate,
+            'amount_inr': split.amount,
+            'impact': -split.amount, # Negative impact
+            'ref_id': exp.id,
+            'ref_type': 'expense'
+        })
+        
+    for stl in sent_settlements:
+        ledger_items.append({
+            'date': stl.date,
+            'created_at': stl.created_at,
+            'desc': f"Settlement paid to {stl.receiver.full_name}",
+            'type': 'Settlement Sent',
+            'orig_amount': stl.original_amount,
+            'currency': stl.currency,
+            'rate': stl.exchange_rate,
+            'amount_inr': stl.amount,
+            'impact': stl.amount, # Positive impact
+            'ref_id': stl.id,
+            'ref_type': 'settlement'
+        })
+        
+    for stl in received_settlements:
+        ledger_items.append({
+            'date': stl.date,
+            'created_at': stl.created_at,
+            'desc': f"Settlement received from {stl.payer.full_name}",
+            'type': 'Settlement Received',
+            'orig_amount': stl.original_amount,
+            'currency': stl.currency,
+            'rate': stl.exchange_rate,
+            'amount_inr': stl.amount,
+            'impact': -stl.amount, # Negative impact
+            'ref_id': stl.id,
+            'ref_type': 'settlement'
+        })
+        
+    # 3. Sort chronologically by date, and fall back to created_at
+    ledger_items.sort(key=lambda x: (x['date'], x['created_at']))
+    
+    # 4. Calculate running balance
+    running = Decimal('0.00')
+    for item in ledger_items:
+        running += item['impact']
+        item['running_balance'] = running
+        
+    return render_template(
+        'groups/ledger.html',
+        group=group,
+        target_user=target_user,
+        ledger_items=ledger_items,
+        total_balance=running
+    )

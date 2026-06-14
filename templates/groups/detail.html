@@ -29,6 +29,9 @@
             </span>
         </div>
         <div class="d-flex gap-2">
+            <a href="{{ url_for('importer.import_csv_view', group_id=group.id) }}" class="btn btn-outline-light px-4 py-2 rounded-pill fw-medium">
+                <i class="bi bi-file-earmark-spreadsheet me-1"></i> Import CSV
+            </a>
             <a href="{{ url_for('expenses.add_expense', group_id=group.id) }}" class="btn btn-accent px-4 py-2 rounded-pill fw-medium shadow-sm">
                 <i class="bi bi-plus-lg me-1"></i> Add Expense
             </a>
@@ -167,9 +170,9 @@
             <div class="card-body p-0">
                 <ul class="list-group list-group-flush">
                     {% for item in members_data %}
-                        <li class="list-group-item d-flex justify-content-between align-items-center border-0 px-3 py-2">
+                        <li class="list-group-item d-flex justify-content-between align-items-center border-0 px-3 py-3 border-bottom">
                             <div class="d-flex align-items-center">
-                                <span class="avatar-circle me-2" style="width: 32px; height: 32px; font-size: 0.85rem;">
+                                <span class="avatar-circle me-2" style="width: 36px; height: 36px; font-size: 0.85rem;">
                                     {{ item.user.full_name[0]|upper }}
                                 </span>
                                 <div>
@@ -177,11 +180,22 @@
                                     {% if item.user.id == group.creator_id %}
                                         <span class="badge bg-dark rounded-pill ms-1" style="font-size: 0.65rem;">Creator</span>
                                     {% endif %}
+                                    {% if not item.is_active %}
+                                        <span class="badge bg-warning text-dark ms-1" style="font-size: 0.65rem;">Inactive</span>
+                                    {% endif %}
+                                    <div class="text-muted mt-1" style="font-size: 0.65rem; line-height: 1.2;">
+                                        {% for interval in item.intervals %}
+                                            <span class="d-block"><i class="bi bi-calendar3 me-1"></i>{{ interval }}</span>
+                                        {% endfor %}
+                                    </div>
                                 </div>
                             </div>
                             
                             <div class="d-flex align-items-center">
-                                <span class="small me-2">
+                                <a href="{{ url_for('groups.member_ledger', group_id=group.id, user_id=item.user.id) }}" class="btn btn-link btn-sm p-0 me-2 text-decoration-none" title="Audit Ledger" style="font-size: 1.15rem;">
+                                    <i class="bi bi-journal-text text-accent"></i>
+                                </a>
+                                <span class="small me-2 text-end">
                                     {% if item.balance > 0 %}
                                         <span class="text-success fw-semibold">owes +Rs. {{ "%.2f"|format(item.balance) }}</span>
                                     {% elif item.balance < 0 %}
@@ -192,7 +206,7 @@
                                 </span>
                                 
                                 <!-- Remove Member Option (Only group creator can do this, cannot remove self) -->
-                                {% if current_user.id == group.creator_id and item.user.id != current_user.id %}
+                                {% if current_user.id == group.creator_id and item.user.id != current_user.id and item.is_active %}
                                     <form action="{{ url_for('groups.remove_member', group_id=group.id, user_id=item.user.id) }}" method="POST" onsubmit="return confirm('Are you sure you want to remove {{ item.user.full_name }}?');" class="m-0">
                                         <button type="submit" class="btn btn-outline-danger btn-sm border-0 p-1" title="Remove member">
                                             <i class="bi bi-trash3-fill"></i>

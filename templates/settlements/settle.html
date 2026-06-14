@@ -19,7 +19,7 @@
                     <label for="payerSelect" class="form-label fw-semibold">Who paid?</label>
                     <select name="payer_id" class="form-select form-control-premium" id="payerSelect" required>
                         <option value="" disabled selected>Choose payer...</option>
-                        {% for member in group.members %}
+                        {% for member in active_members %}
                             <option value="{{ member.user.id }}" {% if member.user.id == current_user.id %}selected{% endif %}>
                                 {{ member.user.full_name }} {% if member.user.id == current_user.id %}(You){% endif %}
                             </option>
@@ -33,7 +33,7 @@
                     <label for="receiverSelect" class="form-label fw-semibold">Who received the payment?</label>
                     <select name="receiver_id" class="form-select form-control-premium" id="receiverSelect" required>
                         <option value="" disabled selected>Choose receiver...</option>
-                        {% for member in group.members %}
+                        {% for member in active_members %}
                             {% if member.user.id != current_user.id %}
                                 <option value="{{ member.user.id }}">{{ member.user.full_name }}</option>
                             {% else %}
@@ -43,12 +43,35 @@
                     </select>
                     <div class="form-text text-muted">This user's credit will decrease (or debt increase).</div>
                 </div>
+
+                <div class="row mb-3">
+                    <!-- Date -->
+                    <div class="col-md-4">
+                        <label for="settleDate" class="form-label fw-semibold">Date</label>
+                        <input type="date" name="date" class="form-control form-control-premium" id="settleDate" required>
+                    </div>
+
+                    <!-- Currency -->
+                    <div class="col-md-4">
+                        <label for="settleCurrency" class="form-label fw-semibold">Currency</label>
+                        <select name="currency" class="form-select form-control-premium" id="settleCurrency" required>
+                            <option value="INR" selected>INR (Rs.)</option>
+                            <option value="USD">USD ($)</option>
+                        </select>
+                    </div>
+
+                    <!-- Exchange Rate -->
+                    <div class="col-md-4">
+                        <label for="exchangeRate" class="form-label fw-semibold">Exchange Rate (to INR)</label>
+                        <input type="number" step="0.000001" min="0.000001" name="exchange_rate" class="form-control form-control-premium" id="exchangeRate" value="1.0" readonly required>
+                    </div>
+                </div>
                 
                 <!-- Amount -->
                 <div class="mb-4">
-                    <label for="settleAmount" class="form-label fw-semibold">Amount Paid (Rs.)</label>
+                    <label for="settleAmount" class="form-label fw-semibold">Amount Paid</label>
                     <div class="input-group">
-                        <span class="input-group-text bg-light border-2 border-end-0" style="border-radius: var(--border-radius-md) 0 0 var(--border-radius-md);">Rs.</span>
+                        <span class="input-group-text bg-light border-2 border-end-0" id="currencySymbol" style="border-radius: var(--border-radius-md) 0 0 var(--border-radius-md);">Rs.</span>
                         <input type="number" step="0.01" name="amount" class="form-control form-control-premium border-start-0" id="settleAmount" placeholder="0.00" required>
                     </div>
                 </div>
@@ -68,6 +91,30 @@ document.addEventListener('DOMContentLoaded', function() {
     const settleForm = document.getElementById('settleForm');
     const payerSelect = document.getElementById('payerSelect');
     const receiverSelect = document.getElementById('receiverSelect');
+
+    // Date pre-population
+    const dateInput = document.getElementById('settleDate');
+    if (dateInput && !dateInput.value) {
+        const today = new Date().toISOString().split('T')[0];
+        dateInput.value = today;
+    }
+
+    // Currency and Exchange Rate handler
+    const currencySelect = document.getElementById('settleCurrency');
+    const currencySymbol = document.getElementById('currencySymbol');
+    const exchangeRateInput = document.getElementById('exchangeRate');
+
+    currencySelect.addEventListener('change', function() {
+        if (this.value === 'USD') {
+            currencySymbol.innerText = '$';
+            exchangeRateInput.value = '83.00';
+            exchangeRateInput.readOnly = false;
+        } else {
+            currencySymbol.innerText = 'Rs.';
+            exchangeRateInput.value = '1.0';
+            exchangeRateInput.readOnly = true;
+        }
+    });
     
     settleForm.addEventListener('submit', function(e) {
         if (payerSelect.value === receiverSelect.value) {
